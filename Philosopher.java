@@ -1,13 +1,6 @@
 //package co.tylerblanton;
 import java.util.concurrent.locks.Lock;
 import java.util.Random;
-//import co.tylerblanton.DiningPhilosophers;
-
-/**
- * Created by tlblanton on 3/3/16.
- */
-
-//philosophers eat for less than 5 seconds, and
 
 public class Philosopher implements Runnable
 {
@@ -20,13 +13,7 @@ public class Philosopher implements Runnable
     int timesEaten;
     String state;
     int number;
-    public Philosopher(int n, boolean r, boolean l)
-    {
-        leftChopstick = l;
-        rightChopstick = r;
-        timesEaten = 0;
-        number = n;
-    }
+
     public Philosopher(int newNum)
     {
         leftChopstick = false;
@@ -39,7 +26,6 @@ public class Philosopher implements Runnable
         state = "hungry";
     }
 
-
     //each philosopher will have their own run through of this
     public void run()
     {
@@ -47,10 +33,10 @@ public class Philosopher implements Runnable
         {
             while (timesEaten < DiningPhilosophers.numOfPhilosophers)
             {
+                think();       //take some time to think after eating (or not eating). Think for T milliseconds. Eat for E. T<E
                 getLeftChopstick();     //try to get left. pick up if available and lock it.
                 getRightChopstick();    //if you have left, try to get right. If you can get right, lock it. If not, unlock left and wait
                 eat();  //If you have both chopsticks then increment timesEaten and wait(time spent eating), and then drop chopsticks.
-                //think();       //take some time to think after eating.. Think for T milliseconds. Eat for E. T<E
             }
             state = "Sleeping";
             releaseChopsticks();
@@ -71,20 +57,18 @@ public class Philosopher implements Runnable
         thinkTime = randomGen.nextInt((int)eatTime/1000);
         thinkTime *= 1000;
         long temp = thinkTime;
-        System.out.println("temp is " + temp + " eat time is " + eatTime);
         try
         {
-            System.out.println("about to wait");
             Thread.sleep(temp);
         }catch(Exception e)
         {
-            System.out.println("think sleep didn't go well");
+            System.out.println("Can't spend time thinking -> " + e);
         }
     }
 
     public void getLeftChopstick()
     {
-        state = "hungry";
+        state = "Hungry";   //when you start grabbing for chopsticks it means you're hungry
         display();
         leftNum = grabChopstick();
         if(leftNum != -1)
@@ -127,41 +111,27 @@ public class Philosopher implements Runnable
             if (DiningPhilosophers.chopsticks.get(i).isLocked() == false)
             {
                 DiningPhilosophers.chopsticks.get(i).lock();
-                System.out.println("locking chopstick " + i);
                 return i;
             }
         }
-
         return -1;
     }
-
 
     public void eat()
     {
         Random randomGen = new Random();
         if(leftChopstick && rightChopstick)
         {
-            state = "Eating";
-            display();
-
-
+            state = "Eating";   //if you have both chopsticks, you are then put in eating state
+            display();          //dispay change of state
             try
             {
-                Random rand = new Random();
-                eatTime = 2 + randomGen.nextInt(4);
-                eatTime *= 1000;
-                long temp = eatTime;
-
-                Thread.sleep(eatTime);
+                eatTime = 2 + randomGen.nextInt(4);     //getting random number between 2 and 5. Because time thinking must be less than time spend eating and we go in whole second increments, this minimum for eating cannot be 1 second.
+                eatTime *= 1000;        //time 1000 to convert to whole seconds instead of milliseconds
+                Thread.sleep(eatTime);  //thread sleep for 'eatTime' milliseconds (2000 to 5000) or 2 to 5 seconds
             }catch(Exception e)
             {
-                System.out.println("eat sleep didn't go well");
-            }
-            System.out.println("about to release. " + leftNum + " " + rightNum);
-
-            for(int i = 0; i < DiningPhilosophers.chopsticks.size(); ++i)
-            {
-                System.out.print(DiningPhilosophers.chopsticks.get(i).isLocked());
+                System.out.println("Couldn't get to sleep after eating -> " + e);
             }
 
             DiningPhilosophers.chopsticks.get(leftNum).unlock();    //releasing chopsticks and setting chopstick numbers to -1
@@ -171,22 +141,12 @@ public class Philosopher implements Runnable
             leftChopstick = false;
             rightChopstick = false;
             timesEaten++;
-            think();
-
         }
         else
         {
-            try
-            {
-                state = "hungry";
-                display();
-                releaseChopsticks();
-                System.out.println(number + " did not eat. Waiting for 2 seconds.");
-                Thread.sleep(2000);
-            }catch(Exception e)
-            {
-
-            }
+            state = "Hungry";
+            releaseChopsticks();
+            display();
         }
     }
 
@@ -206,6 +166,10 @@ public class Philosopher implements Runnable
         rightNum = -1;
     }
 
+    //in order to make sure that output doesn't get jumbled and awful, I treat the display function as a shared resource(similar to the chopstick locks)
+    //and so I have one lock to say whether the display is currently being used by a philosopher or not. If it is locked, then the philosopher
+    //waits for his turn to display. If not, the phiolosopher locks the display lock, displays new information, then unlocks the display lock.
+    //This ensures that each time there is a change in state, it is displayed
     public void display()
     {
         while(DiningPhilosophers.disp.isLocked())
@@ -215,18 +179,17 @@ public class Philosopher implements Runnable
                 Thread.sleep(50);
             }catch(Exception e)
             {
-                System.out.println("Can't sleep in display");
+                System.out.println("Can't sleep in display -> " + e);
             }
         }
         DiningPhilosophers.disp.lock();
-        System.out.println("Philosopher\tState\tTimesEaten");
-        System.out.println("--------------------------------");
+        System.out.format("%-15s%-15s%s\n", "Philosopher", "State", "Times Eaten");
+        System.out.println("------------------------------------------");
         for(int i = 0; i < DiningPhilosophers.numOfPhilosophers; ++i)
         {
-            System.out.println(DiningPhilosophers.philArr.get(i).number + "\t\t" + DiningPhilosophers.philArr.get(i).state + "\t\t" + DiningPhilosophers.philArr.get(i).timesEaten);
+            System.out.format("%-15d%-15s%d\n", DiningPhilosophers.philArr.get(i).number, DiningPhilosophers.philArr.get(i).state, DiningPhilosophers.philArr.get(i).timesEaten);
         }
-        System.out.println("--------------------------------");
+        System.out.println("------------------------------------------\n");
         DiningPhilosophers.disp.unlock();
     }
-
 }
